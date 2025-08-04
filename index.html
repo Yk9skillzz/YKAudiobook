@@ -1,1 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scan & Read</title>
+  <style>
+    body {
+      font-family: -apple-system, sans-serif;
+      padding: 1em;
+      max-width: 480px;
+      margin: auto;
+      text-align: center;
+    }
+    button, input[type="file"] {
+      padding: 0.5em 1em;
+      font-size: 1em;
+      margin-top: 0.5em;
+    }
+    #text {
+      white-space: pre-wrap;
+      margin-top: 1em;
+      text-align: left;
+    }
+    #status {
+      margin-top: 0.5em;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <h1>Scan & Read 📖</h1>
+
+  <input type="file" id="fileInput" accept="image/*" />
+  <br>
+  <button id="scan">Scan Book Page</button>
+
+  <div id="status">Waiting for image...</div>
+  <div id="text">Recognized text will appear here...</div>
+
+  <button id="read">Read Aloud</button>
+
+  <script src="https://unpkg.com/tesseract.js@v6.0.0/dist/tesseract.min.js"></script>
+  <script>
+    const scanBtn = document.getElementById('scan');
+    const readBtn = document.getElementById('read');
+    const fileInput = document.getElementById('fileInput');
+    const textEl = document.getElementById('text');
+    const statusEl = document.getElementById('status');
+    let recognized = '';
+
+    scanBtn.onclick = async () => {
+      const file = fileInput.files[0];
+      if (!file) return alert('Please select an image file.');
+
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      await img.decode();
+
+      // Resize only if it's larger than 1000px wide
+      const MAX_WIDTH = 1000;
+      const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const resizedBlob = await new Promise(resolve =>
+        canvas.toBlob(resolve, 'image/jpeg')
+      );
+
+      textEl.textContent = '';
+      statusEl.textContent = 'Recognizing...';
+
+      const worker = Tesseract.createWorker({
+        logger: m => statusEl.textContent = (m.status === 'recognizing text' ? (m.progress * 100).toFixed(1) + '%' : m.status)
+      });
+
+      await worker.load();
+      await worker.loadLanguage('eng');
+      await worker.initialize('eng');
+      const { data: { text } } = await worker.recognize(resizedBlob);
+      await worker.terminate();
+
+      recognized = text;
+      textEl.textContent = recognized;
+      statusEl.textContent = 'Done ✔️';
+    };
+
+    readBtn.onclick = () => {
+      if (!recognized) return alert('Please scan a page first.');
+      const utterance = new SpeechSynthesisUtterance(recognized);
+      speechSynthesis.speak(utterance);
+    };
+  </script>
+</body>
+</html>
 
