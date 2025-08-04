@@ -57,37 +57,41 @@
       img.src = URL.createObjectURL(file);
       await img.decode();
 
-      // Resize only if it's larger than 1000px wide
+      // Resize image to reduce load
       const MAX_WIDTH = 1000;
       const scale = img.width > MAX_WIDTH ? MAX_WIDTH / img.width : 1;
-
       const canvas = document.createElement('canvas');
       canvas.width = img.width * scale;
       canvas.height = img.height * scale;
-
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      const resizedBlob = await new Promise(resolve =>
-        canvas.toBlob(resolve, 'image/jpeg')
-      );
+      const resizedDataUrl = canvas.toDataURL('image/jpeg');
 
       textEl.textContent = '';
       statusEl.textContent = 'Recognizing...';
 
-      const worker = Tesseract.createWorker({
-        logger: m => statusEl.textContent = (m.status === 'recognizing text' ? (m.progress * 100).toFixed(1) + '%' : m.status)
+      Tesseract.recognize(
+        resizedDataUrl,
+        'eng',
+        {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              statusEl.textContent = `${(m.progress * 100).toFixed(1)}%`;
+            } else {
+              statusEl.textContent = m.status;
+            }
+          }
+        }
+      ).then(({ data: { text } }) => {
+        recognized = text;
+        textEl.textContent = recognized;
+        statusEl.textContent = 'Done ✔️';
+      }).catch(err => {
+        console.error(err);
+        statusEl.textContent = 'Error during recognition ❌';
+        alert("Something went wrong. Try a smaller or clearer image.");
       });
-
-      await worker.load();
-      await worker.loadLanguage('eng');
-      await worker.initialize('eng');
-      const { data: { text } } = await worker.recognize(resizedBlob);
-      await worker.terminate();
-
-      recognized = text;
-      textEl.textContent = recognized;
-      statusEl.textContent = 'Done ✔️';
     };
 
     readBtn.onclick = () => {
@@ -98,4 +102,3 @@
   </script>
 </body>
 </html>
-
